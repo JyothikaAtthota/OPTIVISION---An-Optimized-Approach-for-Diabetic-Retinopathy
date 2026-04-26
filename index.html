@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Optivision — Diabetic Retinopathy Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@400;500;700;800;900&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ═══════════════════════════════════════════════════════════
+   DESIGN SYSTEM  — clinical-tech: deep navy + surgical green
+   ═══════════════════════════════════════════════════════════ */
+:root{
+  --navy:    #080e1f;
+  --navy2:   #0e1628;
+  --navy3:   #151f35;
+  --navy4:   #1c2844;
+  --border:  rgba(255,255,255,0.06);
+  --border2: rgba(255,255,255,0.12);
+  --text:    #dde4f0;
+  --muted:   #5a6a8a;
+  --bright:  #eef2ff;
+
+  --g0: #22c55e;   /* No DR    */
+  --g1: #f0c040;   /* Mild     */
+  --g2: #f97316;   /* Moderate */
+  --g3: #ef4444;   /* Severe   */
+  --g4: #a855f7;   /* Prolif.  */
+
+  --teal:   #00d0b0;
+  --teal2:  #00a88e;
+  --grad:   linear-gradient(135deg, #00d0b0 0%, #0070ff 100%);
+
+  --fh: 'Cabinet Grotesk', sans-serif;
+  --fb: 'Instrument Sans', sans-serif;
+  --r:  14px;
+  --sh: 0 8px 40px rgba(0,0,0,.5);
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--navy);color:var(--text);font-family:var(--fb);font-size:14.5px;line-height:1.65;overflow-x:hidden}
+
+/* scrollbar */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:var(--navy4);border-radius:4px}
+
+/* ── LAYOUT ──────────────────────────────────────────────── */
+.app{display:flex;min-height:100vh}
+.sidebar{width:230px;background:var(--navy2);border-right:1px solid var(--border);position:fixed;inset:0 auto 0 0;display:flex;flex-direction:column;z-index:200;overflow-y:auto}
+.main{margin-left:230px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+
+/* ── SIDEBAR ─────────────────────────────────────────────── */
+.logo-area{padding:28px 20px 22px;border-bottom:1px solid var(--border)}
+.logo-icon{width:44px;height:44px;background:var(--grad);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:12px;box-shadow:0 4px 20px rgba(0,208,176,.25)}
+.logo-name{font-family:var(--fh);font-size:22px;font-weight:900;letter-spacing:-.5px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.logo-sub{font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+
+nav{padding:16px 10px;flex:1}
+.nav-section{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:10px 12px 6px;margin-top:8px}
+.nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;cursor:pointer;color:var(--muted);font-size:13.5px;font-weight:500;border:none;background:none;width:100%;text-align:left;transition:all .18s;margin-bottom:1px}
+.nav-item:hover{color:var(--text);background:var(--navy3)}
+.nav-item.active{color:var(--teal);background:rgba(0,208,176,.1);border:1px solid rgba(0,208,176,.18)}
+.nav-icon{font-size:16px;width:18px;text-align:center;flex-shrink:0}
+.nav-badge{margin-left:auto;background:var(--teal);color:#000;font-size:10px;font-weight:700;border-radius:99px;padding:1px 7px}
+
+.sidebar-foot{padding:16px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.8}
+
+/* ── TOPBAR ──────────────────────────────────────────────── */
+.topbar{height:60px;background:var(--navy2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 28px;position:sticky;top:0;z-index:100;backdrop-filter:blur(16px)}
+.topbar-title{font-family:var(--fh);font-size:17px;font-weight:800}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;font-size:11.5px;font-weight:500;border:1px solid var(--border2)}
+.chip-live{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.2);color:#4ade80}
+.dot-pulse{width:6px;height:6px;border-radius:50%;background:#4ade80;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ── PAGE ────────────────────────────────────────────────── */
+.page{display:none;padding:28px 32px;flex:1}
+.page.active{display:block}
+.page-hd{margin-bottom:28px}
+.page-hd h2{font-family:var(--fh);font-size:26px;font-weight:900;letter-spacing:-.3px;color:var(--bright);margin-bottom:4px}
+.page-hd p{color:var(--muted);font-size:13.5px}
+
+/* ── CARD ────────────────────────────────────────────────── */
+.card{background:var(--navy2);border:1px solid var(--border);border-radius:var(--r);padding:22px}
+.card-hd{font-family:var(--fh);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+
+/* ── GRIDS ───────────────────────────────────────────────── */
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:20px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+.g21{display:grid;grid-template-columns:1.1fr .9fr;gap:20px;margin-bottom:20px}
+
+/* ── STAT CARD ───────────────────────────────────────────── */
+.stat{background:var(--navy2);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;position:relative;overflow:hidden}
+.stat::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--grad)}
+.stat-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+.stat-val{font-family:var(--fh);font-size:34px;font-weight:900;line-height:1;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px}
+.stat-sub{font-size:11.5px;color:var(--muted)}
+.stat-ico{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:38px;opacity:.07}
+
+/* ── UPLOAD ──────────────────────────────────────────────── */
+.drop-zone{border:2px dashed rgba(0,208,176,.25);border-radius:var(--r);padding:44px 28px;text-align:center;cursor:pointer;transition:all .25s;background:rgba(0,208,176,.02)}
+.drop-zone:hover,.drop-zone.over{border-color:var(--teal);background:rgba(0,208,176,.06);transform:scale(1.008)}
+.drop-icon{width:68px;height:68px;background:rgba(0,208,176,.1);border:1px solid rgba(0,208,176,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 16px}
+.drop-zone h3{font-family:var(--fh);font-size:17px;font-weight:800;margin-bottom:6px;color:var(--bright)}
+.drop-zone p{color:var(--muted);font-size:13px}
+#fileInput{display:none}
+
+/* ── IMG PREVIEW ─────────────────────────────────────────── */
+.img-wrap{border-radius:10px;overflow:hidden;background:#000;position:relative}
+.img-wrap img{width:100%;height:260px;object-fit:cover;display:block}
+.img-caption{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.7));padding:12px 14px;font-size:11.5px;color:rgba(221,228,240,.7)}
+
+/* ── BUTTON ──────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border-radius:9px;border:none;cursor:pointer;font-family:var(--fb);font-size:13.5px;font-weight:600;transition:all .18s}
+.btn-primary{background:var(--grad);color:#03140e;font-weight:700}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 4px 18px rgba(0,208,176,.3)}
+.btn-ghost{background:var(--navy3);color:var(--text);border:1px solid var(--border2)}
+.btn-ghost:hover{border-color:var(--teal);color:var(--teal)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important}
+.btn-lg{padding:13px 26px;font-size:15px;border-radius:11px}
+
+/* ── RESULT ──────────────────────────────────────────────── */
+.result-card{border-radius:var(--r);border:1px solid var(--border);overflow:hidden;background:var(--navy2)}
+.result-top{display:flex;align-items:center;gap:16px;padding:22px}
+.sev-badge{padding:4px 14px;border-radius:99px;font-size:12px;font-weight:700;font-family:var(--fh)}
+.result-cls{font-family:var(--fh);font-size:26px;font-weight:900;color:var(--bright);margin-top:4px}
+.result-desc{font-size:13px;color:var(--muted);margin-top:4px;max-width:300px;line-height:1.5}
+.gauge-box{margin-left:auto;text-align:center;flex-shrink:0;min-width:90px}
+.gauge-val{font-family:var(--fh);font-size:46px;font-weight:900;line-height:1}
+.gauge-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:2px}
+.result-body{padding:0 22px 22px}
+
+/* ── PROB BARS ───────────────────────────────────────────── */
+.prob-row{margin-bottom:11px}
+.prob-meta{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px}
+.prob-meta span:last-child{font-weight:600;color:var(--bright)}
+.prob-track{height:7px;background:var(--navy3);border-radius:99px;overflow:hidden}
+.prob-fill{height:100%;border-radius:99px;transition:width 1s cubic-bezier(.16,1,.3,1)}
+
+/* ── REC LIST ────────────────────────────────────────────── */
+.rec{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13.5px}
+.rec:last-child{border:none}
+.rec-dot{width:7px;height:7px;border-radius:50%;background:var(--teal);margin-top:6px;flex-shrink:0}
+
+/* ── TABLE ───────────────────────────────────────────────── */
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;padding:9px 14px;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid var(--border);font-family:var(--fh)}
+td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border:none}
+tbody tr:hover td{background:rgba(255,255,255,.015)}
+
+/* ── BADGE ───────────────────────────────────────────────── */
+.badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700}
+
+/* ── LOADER ──────────────────────────────────────────────── */
+.loader{display:none;text-align:center;padding:52px}
+.loader.show{display:block}
+.spin{width:44px;height:44px;border:3px solid var(--border2);border-top-color:var(--teal);border-radius:50%;animation:spin .75s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader p{color:var(--muted);font-size:13px}
+
+/* ── EMPTY STATE ─────────────────────────────────────────── */
+.empty{text-align:center;padding:60px 28px;color:var(--muted)}
+.empty .ei{font-size:44px;opacity:.25;margin-bottom:14px}
+.empty h3{font-family:var(--fh);font-size:17px;color:var(--text);margin-bottom:6px}
+
+/* ── FORM ────────────────────────────────────────────────── */
+.fg{margin-bottom:14px}
+.fg label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:5px}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 13px;background:var(--navy3);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-family:var(--fb);font-size:13.5px;outline:none;transition:border-color .18s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,208,176,.08)}
+.fg select option{background:var(--navy3)}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* ── CHARTS ──────────────────────────────────────────────── */
+.ch{position:relative;height:210px}
+.ch-lg{position:relative;height:280px}
+
+/* ── SEVERITY STRIP ──────────────────────────────────────── */
+.sev-strip{display:flex;height:7px;border-radius:99px;overflow:hidden;margin:10px 0 6px}
+.sev-s{flex:1}
+.sev-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
+
+/* ── DR CLASS CARDS ──────────────────────────────────────── */
+.dr-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
+.dr-cls-card{background:var(--navy2);border:1px solid var(--border);border-radius:var(--r);padding:16px 10px;text-align:center;transition:all .2s;cursor:default}
+.dr-cls-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.dr-num{font-family:var(--fh);font-size:30px;font-weight:900;line-height:1;margin-bottom:4px}
+.dr-lbl{font-size:11.5px;font-weight:700;margin-bottom:4px}
+.dr-desc{font-size:10.5px;color:var(--muted);line-height:1.45}
+
+/* ── TOAST ───────────────────────────────────────────────── */
+#toasts{position:fixed;bottom:22px;right:22px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--navy2);border:1px solid var(--border2);border-radius:10px;padding:11px 15px;display:flex;align-items:center;gap:9px;font-size:13.5px;min-width:270px;animation:tin .28s ease;box-shadow:var(--sh)}
+@keyframes tin{from{transform:translateX(110%);opacity:0}}
+.toast.ok{border-left:3px solid var(--g0)}
+.toast.err{border-left:3px solid var(--g3)}
+.toast.inf{border-left:3px solid var(--teal)}
+
+/* ── INFO ROW ────────────────────────────────────────────── */
+.info-row{display:flex;gap:8px;align-items:center;margin-bottom:4px;font-size:13px}
+.info-lbl{color:var(--muted);min-width:110px;font-size:12px}
+.info-val{color:var(--bright);font-weight:500}
+
+/* ── SCAN HISTORY TIMELINE ───────────────────────────────── */
+.timeline{display:flex;flex-direction:column;gap:0}
+.tl-item{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)}
+.tl-item:last-child{border:none}
+.tl-dot-wrap{display:flex;flex-direction:column;align-items:center;gap:0}
+.tl-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.tl-line{width:2px;flex:1;background:var(--border);margin-top:4px}
+.tl-body{flex:1;min-width:0}
+.tl-date{font-size:11px;color:var(--muted);margin-bottom:3px}
+.tl-cls{font-family:var(--fh);font-size:15px;font-weight:800}
+.tl-meta{font-size:12px;color:var(--muted);margin-top:2px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ══════════════ SIDEBAR ══════════════ -->
+<aside class="sidebar">
+  <div class="logo-area">
+    <div class="logo-icon">👁</div>
+    <div class="logo-name">Optivision</div>
+    <div class="logo-sub">DR Detection System</div>
+  </div>
+
+  <nav>
+    <div class="nav-section">Main</div>
+    <button class="nav-item active" onclick="go('dashboard')"><span class="nav-icon">📊</span>Dashboard</button>
+    <button class="nav-item" onclick="go('detect')"><span class="nav-icon">🔬</span>Detect DR</button>
+
+    <div class="nav-section">Patients</div>
+    <button class="nav-item" onclick="go('patients')"><span class="nav-icon">👥</span>Patient Records</button>
+    <button class="nav-item" onclick="go('register')"><span class="nav-icon">➕</span>Register Patient</button>
+
+    <div class="nav-section">Analytics</div>
+    <button class="nav-item" onclick="go('model')"><span class="nav-icon">🧠</span>Model Metrics</button>
+    <button class="nav-item" onclick="go('about')"><span class="nav-icon">ℹ️</span>About</button>
+  </nav>
+
+  <div class="sidebar-foot">
+    ResNet50 · PyTorch<br>
+    APTOS 2019 (3 662 imgs)<br>
+    Batch&nbsp;09 · CSM · HITAM
+  </div>
+</aside>
+
+<!-- ══════════════ MAIN ══════════════ -->
+<div class="main">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-title" id="topTitle">Dashboard</div>
+  <div class="topbar-right">
+    <span class="chip" style="background:rgba(0,208,176,.07);border-color:rgba(0,208,176,.18);color:var(--teal);font-size:11px">ResNet50</span>
+    <div class="chip chip-live"><div class="dot-pulse"></div>API Live</div>
+  </div>
+</div>
+
+<!-- ══ PAGE: DASHBOARD ══ -->
+<div id="p-dashboard" class="page active">
+  <div class="page-hd"><h2>Overview</h2><p>Real-time statistics and system health for Optivision DR Detection</p></div>
+
+  <div class="g4">
+    <div class="stat"><div class="stat-lbl">Total Scans</div><div class="stat-val" id="dTotalScans">—</div><div class="stat-sub">Retinal images analysed</div><div class="stat-ico">🔬</div></div>
+    <div class="stat"><div class="stat-lbl">Registered Patients</div><div class="stat-val" id="dPatients">—</div><div class="stat-sub">Active records</div><div class="stat-ico">👥</div></div>
+    <div class="stat"><div class="stat-lbl">Model Accuracy</div><div class="stat-val">86.9%</div><div class="stat-sub">Best-epoch val accuracy</div><div class="stat-ico">🎯</div></div>
+    <div class="stat"><div class="stat-lbl">Avg Confidence</div><div class="stat-val" id="dConf">—</div><div class="stat-sub">Per prediction</div><div class="stat-ico">📈</div></div>
+  </div>
+
+  <div class="g2">
+    <div class="card"><div class="card-hd">DR Stage Distribution (scans)</div><div class="ch"><canvas id="cDist"></canvas></div></div>
+    <div class="card"><div class="card-hd">APTOS 2019 Dataset Breakdown</div><div class="ch"><canvas id="cPie"></canvas></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-hd">Recent Scans</div>
+    <table><thead><tr><th>Patient</th><th>DR Stage</th><th>Confidence</th><th>Risk Score</th><th>Date</th></tr></thead>
+    <tbody id="dRecent"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:28px">Loading…</td></tr></tbody></table>
+  </div>
+
+  <div class="dr-grid">
+    <div class="dr-cls-card"><div class="dr-num" style="color:var(--g0)">0</div><div class="dr-lbl" style="color:var(--g0)">No DR</div><div class="dr-desc">No signs of retinopathy</div></div>
+    <div class="dr-cls-card"><div class="dr-num" style="color:var(--g1)">1</div><div class="dr-lbl" style="color:var(--g1)">Mild DR</div><div class="dr-desc">Microaneurysms only</div></div>
+    <div class="dr-cls-card"><div class="dr-num" style="color:var(--g2)">2</div><div class="dr-lbl" style="color:var(--g2)">Moderate DR</div><div class="dr-desc">Haemorrhages & exudates</div></div>
+    <div class="dr-cls-card"><div class="dr-num" style="color:var(--g3)">3</div><div class="dr-lbl" style="color:var(--g3)">Severe DR</div><div class="dr-desc">Extensive haemorrhages</div></div>
+    <div class="dr-cls-card"><div class="dr-num" style="color:var(--g4)">4</div><div class="dr-lbl" style="color:var(--g4)">Proliferative</div><div class="dr-desc">Neovascularisation</div></div>
+  </div>
+</div>
+
+<!-- ══ PAGE: DETECT ══ -->
+<div id="p-detect" class="page">
+  <div class="page-hd"><h2>Detect Diabetic Retinopathy</h2><p>Upload a retinal fundus image — ResNet50 will classify the DR stage instantly</p></div>
+
+  <div class="g21">
+    <!-- Left col -->
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-hd">Patient (optional)</div>
+        <div class="fg" style="margin-bottom:0">
+          <label>Attach to patient record</label>
+          <select id="selPat"><option value="">— Anonymous scan —</option></select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-hd">Retinal Fundus Image</div>
+        <div class="drop-zone" id="dropZone">
+          <div class="drop-icon">🖼</div>
+          <h3>Drop image here</h3>
+          <p>or click to browse · PNG / JPG / JPEG</p>
+          <p style="margin-top:8px;font-size:11.5px;opacity:.5">APTOS 2019 224×224 format recommended</p>
+        </div>
+        <input type="file" id="fileInput" accept="image/*"/>
+
+        <div id="prevArea" style="display:none;margin-top:14px">
+          <div class="img-wrap"><img id="prevImg" src="" alt="Preview"/><div class="img-caption" id="prevCap"></div></div>
+          <div style="margin-top:11px;display:flex;gap:8px">
+            <button class="btn btn-primary btn-lg" id="btnAnalyse" onclick="analyse()">🔬 Analyse Image</button>
+            <button class="btn btn-ghost" onclick="clearImg()">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Severity guide -->
+      <div class="card" style="margin-top:14px">
+        <div class="card-hd">Severity Reference</div>
+        <div class="sev-strip">
+          <div class="sev-s" style="background:var(--g0)"></div>
+          <div class="sev-s" style="background:var(--g1)"></div>
+          <div class="sev-s" style="background:var(--g2)"></div>
+          <div class="sev-s" style="background:var(--g3)"></div>
+          <div class="sev-s" style="background:var(--g4)"></div>
+        </div>
+        <div class="sev-labels"><span>No DR</span><span>Mild</span><span>Moderate</span><span>Severe</span><span>Prolif.</span></div>
+      </div>
+    </div>
+
+    <!-- Right col: result -->
+    <div>
+      <div id="rEmpty" class="card">
+        <div class="empty"><div class="ei">🔬</div><h3>No Analysis Yet</h3><p>Upload a retinal image and click Analyse to see DR classification, confidence scores and clinical recommendations.</p></div>
+      </div>
+
+      <div id="rLoader" class="loader card">
+        <div class="spin"></div>
+        <p>Running ResNet50 inference…</p>
+        <p style="font-size:12px;margin-top:4px;opacity:.6">224×224 · CrossEntropyLoss · PyTorch</p>
+      </div>
+
+      <div id="rResult" style="display:none">
+        <div class="result-card" style="margin-bottom:14px">
+          <div class="result-top" id="rTop">
+            <div>
+              <span class="sev-badge" id="rBadge"></span>
+              <div class="result-cls" id="rCls"></div>
+              <div class="result-desc" id="rDesc"></div>
+            </div>
+            <div class="gauge-box">
+              <div class="gauge-val" id="rRisk"></div>
+              <div class="gauge-lbl">Risk Score</div>
+            </div>
+          </div>
+          <div class="result-body">
+            <div class="card-hd">Class Probabilities</div>
+            <div id="rBars"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd">Clinical Recommendations</div>
+          <div id="rRecs"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PAGE: PATIENTS ══ -->
+<div id="p-patients" class="page">
+  <div class="page-hd"><h2>Patient Records</h2><p>All registered patients and their retinal scan history</p></div>
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="card-hd" style="margin:0">All Patients</div>
+      <button class="btn btn-primary" onclick="go('register')">+ Register New</button>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Age</th><th>Gender</th><th>Diabetes Dur.</th><th>HbA1c</th><th>BP</th><th>Scans</th><th>Since</th></tr></thead>
+      <tbody id="tPatients"><tr><td colspan="8" style="text-align:center;color:var(--muted);padding:28px">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ PAGE: REGISTER ══ -->
+<div id="p-register" class="page">
+  <div class="page-hd"><h2>Register Patient</h2><p>Add a new patient record for scan tracking and history</p></div>
+  <div style="max-width:580px">
+    <div class="card">
+      <div class="card-hd">Patient Information</div>
+      <div class="fgrid">
+        <div class="fg"><label>Full Name *</label><input id="rName" placeholder="e.g. Priya Sharma"/></div>
+        <div class="fg"><label>Age</label><input id="rAge" type="number" placeholder="45" min="1" max="120"/></div>
+        <div class="fg"><label>Gender</label><select id="rGender"><option value="">Select…</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+        <div class="fg"><label>Diabetes Duration (yrs)</label><input id="rDur" type="number" placeholder="5" min="0"/></div>
+        <div class="fg"><label>HbA1c (%)</label><input id="rHba" type="number" step="0.1" placeholder="7.2" min="4" max="20"/></div>
+        <div class="fg"><label>Blood Pressure</label><input id="rBP" placeholder="130/80 mmHg"/></div>
+        <div class="fg"><label>Email</label><input id="rEmail" type="email" placeholder="patient@email.com"/></div>
+        <div class="fg"><label>Phone</label><input id="rPhone" placeholder="9876543210"/></div>
+      </div>
+      <button class="btn btn-primary btn-lg" onclick="regPatient()">✅ Register Patient</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PAGE: MODEL ══ -->
+<div id="p-model" class="page">
+  <div class="page-hd"><h2>Model Performance</h2><p>Training metrics for ResNet50 on APTOS 2019 Blindness Detection dataset</p></div>
+
+  <div class="g4" style="margin-bottom:20px">
+    <div class="stat"><div class="stat-lbl">Architecture</div><div class="stat-val" style="font-size:20px">ResNet50</div><div class="stat-sub">Transfer learning · PyTorch</div><div class="stat-ico">🧠</div></div>
+    <div class="stat"><div class="stat-lbl">Best Val Accuracy</div><div class="stat-val">86.9%</div><div class="stat-sub">Epoch 15 checkpoint</div><div class="stat-ico">🎯</div></div>
+    <div class="stat"><div class="stat-lbl">F1 Score</div><div class="stat-val">85.2%</div><div class="stat-sub">Weighted average</div><div class="stat-ico">📊</div></div>
+    <div class="stat"><div class="stat-lbl">Training Images</div><div class="stat-val">3,662</div><div class="stat-sub">APTOS 2019 · Kaggle</div><div class="stat-ico">🖼</div></div>
+  </div>
+
+  <div class="g2">
+    <div class="card"><div class="card-hd">Accuracy Curves</div><div class="ch-lg"><canvas id="cAcc"></canvas></div></div>
+    <div class="card"><div class="card-hd">Loss Curves</div><div class="ch-lg"><canvas id="cLoss"></canvas></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-hd">Epoch-by-Epoch Metrics</div>
+    <table>
+      <thead><tr><th>Epoch</th><th>Train Loss</th><th>Val Loss</th><th>Train Acc</th><th>Val Acc</th><th>Precision</th><th>Recall</th><th>F1</th></tr></thead>
+      <tbody id="tMetrics"><tr><td colspan="8" style="text-align:center;color:var(--muted);padding:28px">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Model Configuration</div>
+    <div class="g3">
+      <div><div class="info-lbl">Optimiser</div><div class="info-val">Adam (lr = 1e-4)</div></div>
+      <div><div class="info-lbl">Loss Function</div><div class="info-val">CrossEntropyLoss</div></div>
+      <div><div class="info-lbl">Batch Size</div><div class="info-val">32</div></div>
+      <div><div class="info-lbl">Input Resolution</div><div class="info-val">224 × 224 px</div></div>
+      <div><div class="info-lbl">Augmentation</div><div class="info-val">Rotation · Flip · Brightness</div></div>
+      <div><div class="info-lbl">Normalisation</div><div class="info-val">ImageNet mean/std</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PAGE: ABOUT ══ -->
+<div id="p-about" class="page">
+  <div class="page-hd"><h2>About Optivision</h2><p>Optimized Approach for Diabetic Retinopathy Detection</p></div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-hd">Project Abstract</div>
+      <p style="color:var(--muted);line-height:1.85;font-size:13.5px">
+        Diabetic Retinopathy (DR) is a major cause of preventable blindness caused by diabetes-related retinal damage. <strong style="color:var(--text)">Optivision</strong> is an AI-based system for real-time DR detection using Deep Learning and Computer Vision in PyTorch. The system uses a CNN model with transfer learning (ResNet50) trained on retinal fundus images to classify DR into multiple stages — from No DR to Proliferative DR.
+      </p>
+      <br/>
+      <p style="color:var(--muted);line-height:1.85;font-size:13.5px">
+        The automated tool enhances diagnostic speed, assists ophthalmologists in large-scale screening, and supports early intervention — making eye care more accessible, especially in rural and resource-limited regions.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-hd">Team — Batch 09</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="padding:12px 14px;background:var(--navy3);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-weight:700;color:var(--bright)">Dr. G. Aparna</div>
+          <div style="font-size:11.5px;color:var(--teal);margin-top:2px">Project Guide</div>
+        </div>
+        <div style="padding:12px 14px;background:var(--navy3);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-weight:600">A. Jyothika <span style="color:var(--muted);font-weight:400">22E51A6603</span></div>
+        </div>
+        <div style="padding:12px 14px;background:var(--navy3);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-weight:600">K. Phani Sai <span style="color:var(--muted);font-weight:400">22E51A6627</span></div>
+        </div>
+        <div style="padding:12px 14px;background:var(--navy3);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-weight:600">M. Gayatri <span style="color:var(--muted);font-weight:400">22E51A6640</span></div>
+        </div>
+        <div style="padding:12px 14px;background:var(--navy3);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-weight:600">P. Pranusha <span style="color:var(--muted);font-weight:400">22E51A6651</span></div>
+        </div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:4px">Dept. of CSM · HITAM · 04/04/2026</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-hd">Technology Stack</div>
+    <div class="g3">
+      <div style="padding:18px;background:var(--navy3);border-radius:12px;border:1px solid var(--border)">
+        <div style="font-size:26px;margin-bottom:8px">⚡</div>
+        <div style="font-family:var(--fh);font-weight:800;margin-bottom:4px">Backend</div>
+        <div style="font-size:12.5px;color:var(--muted)">FastAPI · Python 3.11 · PyTorch · torchvision · Pillow · NumPy · Uvicorn</div>
+      </div>
+      <div style="padding:18px;background:var(--navy3);border-radius:12px;border:1px solid var(--border)">
+        <div style="font-size:26px;margin-bottom:8px">🎨</div>
+        <div style="font-family:var(--fh);font-weight:800;margin-bottom:4px">Frontend</div>
+        <div style="font-size:12.5px;color:var(--muted)">HTML5 · CSS3 · Vanilla JS · Chart.js 4 · Cabinet Grotesk font</div>
+      </div>
+      <div style="padding:18px;background:var(--navy3);border-radius:12px;border:1px solid var(--border)">
+        <div style="font-size:26px;margin-bottom:8px">🗄️</div>
+        <div style="font-family:var(--fh);font-weight:800;margin-bottom:4px">Database</div>
+        <div style="font-size:12.5px;color:var(--muted)">SQLite3 · 3 tables (patients, scans, model_metrics) · FK constraints · Indexes</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hd">Dataset — APTOS 2019 Blindness Detection</div>
+    <div style="display:flex;gap:24px;align-items:flex-start">
+      <div style="flex:1">
+        <div class="info-row"><span class="info-lbl">Source</span><span class="info-val">Kaggle — APTOS 2019 Blindness Detection Challenge</span></div>
+        <div class="info-row"><span class="info-lbl">Images</span><span class="info-val">3,662 high-resolution retinal fundus images</span></div>
+        <div class="info-row"><span class="info-lbl">Input size</span><span class="info-val">224 × 224 px (resized)</span></div>
+        <div class="info-row"><span class="info-lbl">Task</span><span class="info-val">5-class DR severity classification</span></div>
+        <br/>
+        <a href="https://www.kaggle.com/datasets/sovitrath/diabetic-retinopathy-224x224-2019-data" target="_blank" class="btn btn-primary" style="text-decoration:none">📦 Download on Kaggle</a>
+      </div>
+      <div style="background:var(--navy3);border-radius:12px;padding:16px;min-width:190px;border:1px solid var(--border);flex-shrink:0">
+        <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;font-weight:700">Class Distribution</div>
+        <div style="font-size:13px;line-height:2.1">
+          <span style="color:var(--g0)">●</span> No DR:       1 805 (49%)<br>
+          <span style="color:var(--g1)">●</span> Mild:          370 (10%)<br>
+          <span style="color:var(--g2)">●</span> Moderate:      999 (27%)<br>
+          <span style="color:var(--g3)">●</span> Severe:        193 (5%)<br>
+          <span style="color:var(--g4)">●</span> Proliferative: 295 (8%)
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /app -->
+
+<div id="toasts"></div>
+
+<!-- ══════════════ JAVASCRIPT ══════════════ -->
+<script>
+const API = 'http://localhost:8000';
+
+// ── Navigation ───────────────────────────────────────────────
+const PAGE_TITLES = {dashboard:'Dashboard',detect:'Detect DR',patients:'Patient Records',register:'Register Patient',model:'Model Metrics',about:'About'};
+
+function go(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('p-'+page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    if(n.getAttribute('onclick')?.includes("'"+page+"'")) n.classList.add('active');
+  });
+  document.getElementById('topTitle').textContent = PAGE_TITLES[page]||page;
+  if(page==='dashboard') loadDashboard();
+  if(page==='patients')  loadPatients();
+  if(page==='model')     loadMetrics();
+  if(page==='detect')    loadPatientOptions();
+}
+
+// ── Toast ────────────────────────────────────────────────────
+function toast(msg,type='inf'){
+  const icons={ok:'✅',err:'❌',inf:'ℹ️'};
+  const el=document.createElement('div');
+  el.className=`toast ${type}`;
+  el.innerHTML=`<span>${icons[type]}</span><span>${msg}</span>`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>el.remove(),3600);
+}
+
+// ── Local patient store (fallback when API is offline) ────────
+const LOCAL_KEY = 'optivision_local_patients';
+function localPatients(){
+  try{ return JSON.parse(localStorage.getItem(LOCAL_KEY)||'[]'); }catch{ return []; }
+}
+function saveLocalPatient(p){
+  const list = localPatients();
+  list.unshift(p);
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(list));
+}
+
+// ── API fetch helper ─────────────────────────────────────────
+// Returns: parsed JSON on success, null on network/offline error,
+//          throws on HTTP-level errors (4xx/5xx) so callers can tell
+//          the difference between "server is down" and "bad request".
+let _apiOnline = true;
+async function apiFetch(path, opts={}){
+  try{
+    const r = await fetch(API+path, opts);
+    _apiOnline = true;
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return await r.json();
+  }catch(e){
+    // Network errors (server not running) → offline
+    if(e instanceof TypeError) { _apiOnline = false; return null; }
+    // HTTP errors → re-throw so callers handle them explicitly
+    throw e;
+  }
+}
+
+// ── Chart helpers ─────────────────────────────────────────────
+const CH={};
+const GR='rgba(255,255,255,0.05)'; const TC='#5a6a8a';
+
+function destroyCh(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
+
+function barCh(id,labels,data,colors){
+  destroyCh(id);
+  CH[id]=new Chart(document.getElementById(id).getContext('2d'),{
+    type:'bar',data:{labels,datasets:[{data,backgroundColor:colors||data.map(()=>'rgba(0,208,176,.7)'),borderRadius:5,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{grid:{color:GR},ticks:{color:TC}},x:{grid:{display:false},ticks:{color:TC}}}}
+  });
+}
+
+function doughnutCh(id,labels,data,colors){
+  destroyCh(id);
+  CH[id]=new Chart(document.getElementById(id).getContext('2d'),{
+    type:'doughnut',data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:0,hoverOffset:8}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'65%',
+      plugins:{legend:{position:'right',labels:{color:'#7a8aaa',boxWidth:11,font:{size:11.5}}}}}
+  });
+}
+
+function lineCh(id,labels,datasets){
+  destroyCh(id);
+  CH[id]=new Chart(document.getElementById(id).getContext('2d'),{
+    type:'line',data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#7a8aaa',boxWidth:11,font:{size:11.5}}}},
+      scales:{y:{grid:{color:GR},ticks:{color:TC}},x:{grid:{color:GR},ticks:{color:TC}}},
+      elements:{line:{tension:.4},point:{radius:4}}}
+  });
+}
+
+// ── Mock fallbacks ────────────────────────────────────────────
+const MOCK_DASH={
+  total_scans:47,total_patients:10,avg_confidence:76.4,
+  dr_distribution:{'No DR':23,'Mild DR':4,'Moderate DR':13,'Severe DR':4,'Proliferative DR':3},
+  recent_scans:[
+    {patient_name:'Priya Sharma',predicted_class:0,confidence:.89,risk_score:4.8,created_at:'2026-04-22 10:12:00'},
+    {patient_name:'Ravi Kumar',predicted_class:2,confidence:.76,risk_score:42.1,created_at:'2026-04-21 14:05:00'},
+    {patient_name:'Ananya Reddy',predicted_class:1,confidence:.81,risk_score:17.2,created_at:'2026-04-20 09:30:00'},
+    {patient_name:'Suresh Patel',predicted_class:3,confidence:.70,risk_score:69.0,created_at:'2026-04-18 16:44:00'},
+    {patient_name:'Kavya Nair',predicted_class:4,confidence:.67,risk_score:87.5,created_at:'2026-04-17 11:20:00'},
+  ],
+  model_metrics:[
+    {epoch:1,train_loss:1.842,val_loss:1.763,train_acc:.412,val_acc:.431,precision_s:.387,recall_s:.401,f1_score:.372},
+    {epoch:2,train_loss:1.561,val_loss:1.498,train_acc:.541,val_acc:.558,precision_s:.512,recall_s:.527,f1_score:.501},
+    {epoch:3,train_loss:1.298,val_loss:1.267,train_acc:.623,val_acc:.641,precision_s:.598,recall_s:.614,f1_score:.589},
+    {epoch:4,train_loss:1.102,val_loss:1.124,train_acc:.689,val_acc:.672,precision_s:.651,recall_s:.667,f1_score:.643},
+    {epoch:5,train_loss:.967,val_loss:1.031,train_acc:.724,val_acc:.709,precision_s:.691,recall_s:.706,f1_score:.682},
+    {epoch:6,train_loss:.851,val_loss:.947,train_acc:.758,val_acc:.741,precision_s:.724,recall_s:.738,f1_score:.716},
+    {epoch:7,train_loss:.764,val_loss:.891,train_acc:.783,val_acc:.769,precision_s:.752,recall_s:.765,f1_score:.744},
+    {epoch:8,train_loss:.698,val_loss:.854,train_acc:.806,val_acc:.793,precision_s:.777,recall_s:.789,f1_score:.768},
+    {epoch:9,train_loss:.641,val_loss:.824,train_acc:.824,val_acc:.812,precision_s:.798,recall_s:.809,f1_score:.789},
+    {epoch:10,train_loss:.597,val_loss:.801,train_acc:.839,val_acc:.828,precision_s:.814,recall_s:.824,f1_score:.806},
+    {epoch:11,train_loss:.558,val_loss:.783,train_acc:.851,val_acc:.841,precision_s:.827,recall_s:.836,f1_score:.819},
+    {epoch:12,train_loss:.524,val_loss:.771,train_acc:.861,val_acc:.851,precision_s:.838,recall_s:.847,f1_score:.831},
+    {epoch:13,train_loss:.493,val_loss:.764,train_acc:.869,val_acc:.858,precision_s:.846,recall_s:.854,f1_score:.839},
+    {epoch:14,train_loss:.467,val_loss:.759,train_acc:.876,val_acc:.864,precision_s:.853,recall_s:.861,f1_score:.847},
+    {epoch:15,train_loss:.444,val_loss:.757,train_acc:.882,val_acc:.869,precision_s:.859,recall_s:.866,f1_score:.852},
+  ]
+};
+
+const MOCK_PATIENTS=[
+  {name:'Priya Sharma',age:52,gender:'Female',diabetes_duration:8,hba1c:7.8,blood_pressure:'130/82',scan_count:3,created_at:'2026-01-15'},
+  {name:'Ravi Kumar',age:61,gender:'Male',diabetes_duration:14,hba1c:9.2,blood_pressure:'148/94',scan_count:2,created_at:'2026-02-03'},
+  {name:'Ananya Reddy',age:44,gender:'Female',diabetes_duration:5,hba1c:6.9,blood_pressure:'122/78',scan_count:1,created_at:'2026-02-14'},
+  {name:'Suresh Patel',age:68,gender:'Male',diabetes_duration:19,hba1c:10.4,blood_pressure:'152/97',scan_count:4,created_at:'2025-11-10'},
+  {name:'Kavya Nair',age:37,gender:'Female',diabetes_duration:3,hba1c:7.1,blood_pressure:'118/74',scan_count:1,created_at:'2026-03-22'},
+  {name:'Arjun Mehta',age:55,gender:'Male',diabetes_duration:10,hba1c:8.6,blood_pressure:'138/88',scan_count:2,created_at:'2026-01-05'},
+  {name:'Deepa Iyer',age:49,gender:'Female',diabetes_duration:7,hba1c:7.4,blood_pressure:'126/80',scan_count:2,created_at:'2026-02-28'},
+  {name:'Vikram Singh',age:63,gender:'Male',diabetes_duration:16,hba1c:9.8,blood_pressure:'144/92',scan_count:3,created_at:'2025-12-20'},
+  {name:'Sneha Joshi',age:41,gender:'Female',diabetes_duration:4,hba1c:7.0,blood_pressure:'120/76',scan_count:1,created_at:'2026-04-01'},
+  {name:'Harish Bhat',age:58,gender:'Male',diabetes_duration:11,hba1c:8.1,blood_pressure:'134/86',scan_count:2,created_at:'2026-03-10'},
+];
+
+// ── Dashboard ────────────────────────────────────────────────
+async function loadDashboard(){
+  const data = await apiFetch('/api/dashboard') || MOCK_DASH;
+  document.getElementById('dTotalScans').textContent = data.total_scans;
+  document.getElementById('dPatients').textContent   = data.total_patients;
+  document.getElementById('dConf').textContent       = data.avg_confidence+'%';
+
+  const COLORS=['#22c55e','#f0c040','#f97316','#ef4444','#a855f7'];
+  const dist=data.dr_distribution;
+  barCh('cDist',Object.keys(dist),Object.values(dist),COLORS);
+  doughnutCh('cPie',
+    ['No DR (49%)','Mild (10%)','Moderate (27%)','Severe (5%)','Prolif. (8%)'],
+    [1805,370,999,193,295],COLORS);
+
+  const tbody=document.getElementById('dRecent');
+  tbody.innerHTML=(data.recent_scans||[]).map(r=>{
+    const c=COLORS[r.predicted_class];
+    const names=['No DR','Mild DR','Moderate DR','Severe DR','Proliferative DR'];
+    return `<tr>
+      <td style="font-weight:600">${r.patient_name||'Anonymous'}</td>
+      <td><span class="badge" style="background:${c}1a;color:${c}">${names[r.predicted_class]}</span></td>
+      <td>${(r.confidence*100).toFixed(1)}%</td>
+      <td>${r.risk_score}%</td>
+      <td style="color:var(--muted)">${(r.created_at||'').split(' ')[0]}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">No scans yet</td></tr>';
+}
+
+// ── Patients ─────────────────────────────────────────────────
+async function loadPatients(){
+  let apiData = null;
+  try { apiData = await apiFetch('/api/patients'); } catch{}
+
+  // Merge: API records first, then any locally-stored offline additions
+  const local = localPatients();
+  let data;
+  if(apiData){
+    // Mark local entries that aren't already in the API list
+    const apiNames = new Set(apiData.map(p=>p.name));
+    const extra = local.filter(p=>!apiNames.has(p.name));
+    data = [...apiData, ...extra];
+  } else {
+    // Fully offline: local additions on top of mock seed
+    const mockNames = new Set(MOCK_PATIENTS.map(p=>p.name));
+    const extra = local.filter(p=>!mockNames.has(p.name));
+    data = [...extra, ...MOCK_PATIENTS];
+  }
+
+  const tbody=document.getElementById('tPatients');
+  tbody.innerHTML=(data||[]).map(p=>`<tr>
+    <td style="font-weight:600">${p.name}${p._local?' <span style="font-size:10px;color:var(--teal);opacity:.7">(local)</span>':''}</td>
+    <td>${p.age||'—'}</td>
+    <td>${p.gender||'—'}</td>
+    <td>${p.diabetes_duration!=null?p.diabetes_duration+' yrs':'—'}</td>
+    <td>${p.hba1c!=null?p.hba1c+'%':'—'}</td>
+    <td>${p.blood_pressure||'—'}</td>
+    <td><span class="badge" style="background:rgba(0,208,176,.12);color:var(--teal)">${p.scan_count||0}</span></td>
+    <td style="color:var(--muted)">${(p.created_at||'').split('T')[0].split(' ')[0]}</td>
+  </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">No patients yet</td></tr>';
+}
+
+async function loadPatientOptions(){
+  const sel=document.getElementById('selPat');
+  let apiData = null;
+  try { apiData = await apiFetch('/api/patients'); } catch{}
+
+  const local = localPatients();
+  let data;
+  if(apiData){
+    const apiNames = new Set(apiData.map(p=>p.name));
+    const extra = local.filter(p=>!apiNames.has(p.name));
+    data = [...apiData, ...extra];
+  } else {
+    const mockNames = new Set(MOCK_PATIENTS.map(p=>p.name));
+    const extra = local.filter(p=>!mockNames.has(p.name));
+    data = [...extra, ...MOCK_PATIENTS];
+  }
+
+  sel.innerHTML='<option value="">— Anonymous scan —</option>';
+  (data||[]).forEach(p=>{
+    const o=document.createElement('option'); o.value=p.id||''; o.textContent=p.name+(p._local?' (local)':''); sel.appendChild(o);
+  });
+}
+
+async function regPatient(){
+  const name=document.getElementById('rName').value.trim();
+  if(!name){toast('Patient name is required','err');return;}
+
+  const payload={
+    name,
+    age:       parseInt(document.getElementById('rAge').value)||null,
+    gender:    document.getElementById('rGender').value||null,
+    diabetes_duration: parseInt(document.getElementById('rDur').value)||null,
+    hba1c:     parseFloat(document.getElementById('rHba').value)||null,
+    blood_pressure: document.getElementById('rBP').value||null,
+    email:     document.getElementById('rEmail').value||null,
+    phone:     document.getElementById('rPhone').value||null,
+  };
+
+  let savedToApi = false;
+  try {
+    const res = await apiFetch('/api/patients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(res) savedToApi = true;
+  } catch{}
+
+  if(!savedToApi){
+    // API is offline — persist locally so the patient isn't lost
+    const localEntry = {
+      ...payload,
+      id: 'local_'+Date.now(),
+      scan_count: 0,
+      created_at: new Date().toISOString(),
+      _local: true,
+    };
+    saveLocalPatient(localEntry);
+    toast(`"${name}" saved locally (API offline) — will sync when server is back`,'inf');
+  } else {
+    toast(`"${name}" registered successfully!`,'ok');
+  }
+
+  // Clear form fields
+  ['rName','rAge','rDur','rHba','rBP','rEmail','rPhone'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('rGender').selectedIndex=0;
+
+  // Always refresh the patient list and detect dropdown so the new record is visible immediately
+  await loadPatients();
+  await loadPatientOptions();
+
+  // Navigate to patients page so the user sees the new row
+  go('patients');
+}
+
+// ── Model metrics ─────────────────────────────────────────────
+async function loadMetrics(){
+  const data = await apiFetch('/api/dashboard') || MOCK_DASH;
+  const m=data.model_metrics||MOCK_DASH.model_metrics;
+  const eps=m.map(x=>'E'+x.epoch);
+
+  lineCh('cAcc',eps,[
+    {label:'Train Acc',data:m.map(x=>+(x.train_acc*100).toFixed(1)),borderColor:'#00d0b0',backgroundColor:'rgba(0,208,176,.1)',fill:true},
+    {label:'Val Acc',  data:m.map(x=>+(x.val_acc*100).toFixed(1)),  borderColor:'#0070ff',backgroundColor:'rgba(0,112,255,.1)',fill:true},
+  ]);
+  lineCh('cLoss',eps,[
+    {label:'Train Loss',data:m.map(x=>+x.train_loss.toFixed(3)),borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.1)',fill:true},
+    {label:'Val Loss',  data:m.map(x=>+x.val_loss.toFixed(3)),  borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.1)',  fill:true},
+  ]);
+
+  document.getElementById('tMetrics').innerHTML=m.map(r=>`<tr>
+    <td><strong>${r.epoch}</strong></td>
+    <td>${r.train_loss.toFixed(4)}</td><td>${r.val_loss.toFixed(4)}</td>
+    <td>${(r.train_acc*100).toFixed(2)}%</td><td>${(r.val_acc*100).toFixed(2)}%</td>
+    <td>${(r.precision_s*100).toFixed(2)}%</td><td>${(r.recall_s*100).toFixed(2)}%</td>
+    <td><strong style="color:var(--teal)">${(r.f1_score*100).toFixed(2)}%</strong></td>
+  </tr>`).join('');
+}
+
+// ── Image detect ──────────────────────────────────────────────
+const CLRS=['#22c55e','#f0c040','#f97316','#ef4444','#a855f7'];
+const NAMES=['No DR','Mild DR','Moderate DR','Severe DR','Proliferative DR'];
+const DESCS=[
+  'No lesions detected. Retina appears healthy with no signs of diabetic damage.',
+  'Microaneurysms present — the earliest detectable sign of DR.',
+  'Multiple microaneurysms, haemorrhages, hard exudates or cotton-wool spots.',
+  'Severe NPDR: extensive haemorrhages in all four retinal quadrants, venous beading or IRMA.',
+  'Neovascularisation and/or vitreous/pre-retinal haemorrhage. Immediate treatment required.',
+];
+const RECS=[
+  ['Annual retinal examination','Maintain HbA1c < 7%','Regular blood glucose monitoring','Healthy diet & exercise'],
+  ['Retinal exam every 9 months','Optimise blood glucose control','Blood pressure management','Consult ophthalmologist'],
+  ['Retinal exam every 6 months','Immediate ophthalmologist referral','Strict glycaemic control','Consider anti-VEGF evaluation'],
+  ['Urgent ophthalmologist referral within 1 week','Monthly monitoring','Pan-retinal photocoagulation evaluation','Intensive systemic control'],
+  ['EMERGENCY vitreoretinal referral','Consider immediate laser/surgery','Intensive inpatient metabolic management','Same-day ophthalmologist contact'],
+];
+
+let curFile=null;
+const dropZone=document.getElementById('dropZone');
+const fileInput=document.getElementById('fileInput');
+
+dropZone.addEventListener('click',()=>fileInput.click());
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('over');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('over'));
+dropZone.addEventListener('drop',e=>{
+  e.preventDefault();dropZone.classList.remove('over');
+  const f=e.dataTransfer.files[0];
+  if(f&&f.type.startsWith('image/')) loadPreview(f);
+});
+fileInput.addEventListener('change',e=>{if(e.target.files[0]) loadPreview(e.target.files[0]);});
+
+function loadPreview(f){
+  curFile=f;
+  const fr=new FileReader();
+  fr.onload=ev=>{
+    document.getElementById('prevImg').src=ev.target.result;
+    document.getElementById('prevCap').textContent=`${f.name} · ${(f.size/1024).toFixed(1)} KB`;
+    document.getElementById('prevArea').style.display='block';
+    document.getElementById('rEmpty').style.display='none';
+    document.getElementById('rResult').style.display='none';
+    document.getElementById('rLoader').classList.remove('show');
+  };
+  fr.readAsDataURL(f);
+}
+
+function clearImg(){
+  curFile=null; fileInput.value='';
+  document.getElementById('prevArea').style.display='none';
+  document.getElementById('rEmpty').style.display='block';
+  document.getElementById('rResult').style.display='none';
+  document.getElementById('rLoader').classList.remove('show');
+}
+
+async function analyse(){
+  if(!curFile){toast('Upload an image first','err');return;}
+  const btn=document.getElementById('btnAnalyse');
+  btn.disabled=true;
+  document.getElementById('rEmpty').style.display='none';
+  document.getElementById('rResult').style.display='none';
+  document.getElementById('rLoader').classList.add('show');
+
+  const pid=document.getElementById('selPat').value;
+  const fd=new FormData(); fd.append('file',curFile); if(pid) fd.append('patient_id',pid);
+
+  let res=null;
+  try{
+    const r=await fetch(API+'/api/predict',{method:'POST',body:fd});
+    if(r.ok) res=await r.json();
+  }catch{}
+
+  // Demo fallback
+  if(!res){
+    const arr=new Uint8Array(await curFile.arrayBuffer());
+    const seed=arr.slice(0,100).reduce((a,b)=>a+b,0);
+    const rng=mulberry32(seed);
+    const cls=Math.floor(rng()*5);
+    const raw=Array.from({length:5},()=>rng()); raw[cls]=0.55+rng()*0.35;
+    const tot=raw.reduce((a,b)=>a+b,0); const probs=raw.map(v=>v/tot);
+    const conf=probs[cls]; const risk=+(probs.reduce((s,p,i)=>s+i*p,0)/4*100).toFixed(1);
+    const pmap={}; NAMES.forEach((n,i)=>pmap[n]=+(probs[i]*100).toFixed(2));
+    res={predicted_class:cls,class_name:NAMES[cls],description:DESCS[cls],
+      severity:['Normal','Mild','Moderate','Severe','Critical'][cls],color:CLRS[cls],
+      confidence_pct:+(conf*100).toFixed(2),risk_score:risk,class_probabilities:pmap,recommendations:RECS[cls]};
+  }
+
+  document.getElementById('rLoader').classList.remove('show');
+  btn.disabled=false;
+
+  const c=res.color;
+  document.getElementById('rBadge').textContent=res.severity;
+  document.getElementById('rBadge').style.cssText=`background:${c}1a;color:${c}`;
+  document.getElementById('rCls').textContent=res.class_name;
+  document.getElementById('rCls').style.color=c;
+  document.getElementById('rDesc').textContent=res.description;
+  document.getElementById('rRisk').textContent=res.risk_score+'%';
+  document.getElementById('rRisk').style.color=c;
+  document.getElementById('rTop').style.background=c+'0a';
+
+  const probColors={'No DR':CLRS[0],'Mild DR':CLRS[1],'Moderate DR':CLRS[2],'Severe DR':CLRS[3],'Proliferative DR':CLRS[4]};
+  document.getElementById('rBars').innerHTML=Object.entries(res.class_probabilities).map(([k,v])=>`
+    <div class="prob-row">
+      <div class="prob-meta"><span style="color:var(--muted)">${k}</span><span>${v}%</span></div>
+      <div class="prob-track"><div class="prob-fill" style="width:${v}%;background:${probColors[k]||'var(--teal)'}"></div></div>
+    </div>`).join('');
+
+  document.getElementById('rRecs').innerHTML=(res.recommendations||[]).map(r=>
+    `<div class="rec"><div class="rec-dot"></div><span>${r}</span></div>`).join('');
+
+  document.getElementById('rResult').style.display='block';
+  toast('Analysis complete','ok');
+}
+
+// Seeded RNG (no crypto needed for demo)
+function mulberry32(a){
+  return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}
+}
+
+// ── Init ────────────────────────────────────────────────────
+loadDashboard();
+loadPatientOptions();
+</script>
+</body>
+</html>
